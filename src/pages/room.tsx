@@ -11,23 +11,23 @@ import {
   addDoc,
   updateDoc,
   query,
-  orderBy
+  orderBy,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useauth";
 import { useTimer } from "../hooks/useTimer";
 
-interface Member { 
-  id: string; 
-  email: string | null; 
+interface Member {
+  id: string;
+  email: string | null;
 }
 
-interface Task { 
-  id: string; 
-  text: string; 
-  isCompleted: boolean; 
-  createdBy: string | null; 
-  createdAt: number; 
+interface Task {
+  id: string;
+  text: string;
+  isCompleted: boolean;
+  createdBy: string | null;
+  createdAt: number;
 }
 
 export default function Room() {
@@ -63,8 +63,8 @@ export default function Room() {
   // 🎉 Confetti Logic
   useEffect(() => {
     if (!user || tasks.length === 0) return;
-    const myTasks = tasks.filter(t => t.createdBy === user.email);
-    const completed = myTasks.filter(t => t.isCompleted).length;
+    const myTasks = tasks.filter((t) => t.createdBy === user.email);
+    const completed = myTasks.filter((t) => t.isCompleted).length;
     const currentProgress = (completed / myTasks.length) * 100;
 
     if (currentProgress >= 99.9 && prevProgressRef.current < 99.9) {
@@ -72,111 +72,197 @@ export default function Room() {
         particleCount: 200,
         spread: 160,
         origin: { y: 0.6 },
-        colors: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF']
+        colors: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
       });
     }
     prevProgressRef.current = currentProgress;
   }, [tasks, user]);
 
+  // Check if room exists
   useEffect(() => {
     async function checkRoom() {
       if (!roomId) return;
       const snapshot = await getDoc(doc(db, "rooms", roomId));
-      if (!snapshot.exists()) { navigate("/dashboard"); return; }
+      if (!snapshot.exists()) {
+        navigate("/dashboard");
+        return;
+      }
       setLoading(false);
     }
     checkRoom();
   }, [roomId, navigate]);
 
+  // Add user to room members
   useEffect(() => {
     if (!roomId || !user) return;
     const memberRef = doc(db, "rooms", roomId, "members", user.uid);
     setDoc(memberRef, { email: user.email, joinedAt: new Date() });
-    return () => { deleteDoc(memberRef).catch(() => {}); };
+    return () => {
+      deleteDoc(memberRef).catch(() => {});
+    };
   }, [roomId, user]);
 
+  // Listen for members and tasks
   useEffect(() => {
     if (!roomId) return;
-    const unsubMembers = onSnapshot(collection(db, "rooms", roomId, "members"), (s) => 
-      setMembers(s.docs.map(d => ({ id: d.id, email: d.data().email } as Member)))
+    const unsubMembers = onSnapshot(collection(db, "rooms", roomId, "members"), (s) =>
+      setMembers(s.docs.map((d) => ({ id: d.id, email: d.data().email } as Member)))
     );
 
-    const tasksQuery = query(collection(db, "rooms", roomId, "tasks"), orderBy("createdAt", "desc"));
-    const unsubTasks = onSnapshot(tasksQuery, (s) => 
-      setTasks(s.docs.map(d => ({ 
-        id: d.id, 
-        text: d.data().text,
-        isCompleted: d.data().isCompleted,
-        createdBy: d.data().createdBy,
-        createdAt: d.data().createdAt
-      } as Task)))
+    const tasksQuery = query(
+      collection(db, "rooms", roomId, "tasks"),
+      orderBy("createdAt", "desc")
+    );
+    const unsubTasks = onSnapshot(tasksQuery, (s) =>
+      setTasks(
+        s.docs.map(
+          (d) =>
+            ({
+              id: d.id,
+              text: d.data().text,
+              isCompleted: d.data().isCompleted,
+              createdBy: d.data().createdBy,
+              createdAt: d.data().createdAt,
+            } as Task)
+        )
+      )
     );
 
-    return () => { unsubMembers(); unsubTasks(); };
+    return () => {
+      unsubMembers();
+      unsubTasks();
+    };
   }, [roomId]);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
-  if (loading) return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-stone-500 font-mono text-xs tracking-widest uppercase italic">Updating UI Components...</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center text-stone-500 font-mono text-xs tracking-widest uppercase italic">
+        Updating UI Components...
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-200 p-8">
-      {/* TIMER SECTION (FINAL CHECKPOINT) */}
-      <div className="flex flex-col items-center justify-center bg-stone-900 border border-stone-800 rounded-xl p-8 mb-12 shadow-2xl max-w-2xl mx-auto">
+    <div className="min-h-screen w-full bg-stone-950 text-stone-200 p-8 flex flex-col items-center">
+      {/* ROOM CODE */}
+      <div className="flex flex-col items-start mb-6 max-w-sm w-full">
+        <span className="text-xs text-stone-400 uppercase tracking-widest mb-1">Room Code</span>
+        <div className="flex items-center gap-2 bg-stone-800 px-4 py-2 rounded border border-stone-700">
+          <span className="font-mono font-bold text-white">{roomId}</span>
+          <button
+            onClick={() => navigator.clipboard.writeText(roomId || "")}
+            className="p-1 hover:bg-stone-700 rounded transition-all"
+            title="Copy Room Code"
+          >
+            COPY 
+          </button>
+        </div>
+      </div>
+
+      {/* TIMER */}
+      <div className="flex flex-col items-center justify-center bg-stone-900 border border-stone-800 rounded-xl p-8 mb-12 shadow-2xl max-w-2xl w-full">
         <div className="text-sm uppercase tracking-widest text-stone-400 mb-2">{mode}</div>
         <div className="text-8xl font-mono font-bold text-white mb-8">{formatTime(timeLeft)}</div>
         {!isRunning && (
           <div className="flex gap-10 mb-8">
             <div className="flex flex-col items-center">
               <span className="text-xs text-stone-400 mb-2">Focus</span>
-              <input type="number" min={1} value={fInput} onChange={(e) => setFInput(e.target.value)} onBlur={() => { const val = Math.max(1, parseInt(fInput) || 25); setFInput(val.toString()); updateSettings(val, parseInt(bInput) || 5); }} className="w-16 text-center bg-stone-800 rounded p-2 outline-none border border-stone-700" />
+              <input
+                type="number"
+                min={1}
+                value={fInput}
+                onChange={(e) => setFInput(e.target.value)}
+                onBlur={() => {
+                  const val = Math.max(1, parseInt(fInput) || 25);
+                  setFInput(val.toString());
+                  updateSettings(val, parseInt(bInput) || 5);
+                }}
+                className="w-16 text-center bg-stone-800 rounded p-2 outline-none border border-stone-700"
+              />
             </div>
             <div className="flex flex-col items-center">
               <span className="text-xs text-stone-400 mb-2">Break</span>
-              <input type="number" min={1} value={bInput} onChange={(e) => setBInput(e.target.value)} onBlur={() => { const val = Math.max(1, parseInt(bInput) || 5); setBInput(val.toString()); updateSettings(parseInt(fInput) || 25, val); }} className="w-16 text-center bg-stone-800 rounded p-2 outline-none border border-stone-700" />
+              <input
+                type="number"
+                min={1}
+                value={bInput}
+                onChange={(e) => setBInput(e.target.value)}
+                onBlur={() => {
+                  const val = Math.max(1, parseInt(bInput) || 5);
+                  setBInput(val.toString());
+                  updateSettings(parseInt(fInput) || 25, val);
+                }}
+                className="w-16 text-center bg-stone-800 rounded p-2 outline-none border border-stone-700"
+              />
             </div>
           </div>
         )}
         <div className="flex gap-6 items-center">
-          <button onClick={() => (isRunning ? pauseTimer() : startTimer())} className="w-16 h-16 rounded-full bg-[#556b2f] text-white text-2xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all">{isRunning ? "❚❚" : "▶"}</button>
-          <button onClick={() => resetTimer()} className="w-12 h-12 rounded-full bg-stone-700 text-white text-xl flex items-center justify-center hover:bg-stone-600 transition-all">⟳</button>
-          <button onClick={() => switchMode()} className="px-6 py-3 rounded-full bg-stone-700 text-white font-bold hover:bg-stone-600 transition-all">{mode === "Focus" ? "Break" : "Focus"}</button>
+          <button
+            onClick={() => (isRunning ? pauseTimer() : startTimer())}
+            className="w-16 h-16 rounded-full bg-[#556b2f] text-white text-2xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
+          >
+            {isRunning ? "❚❚" : "▶"}
+          </button>
+          <button
+            onClick={() => resetTimer()}
+            className="w-12 h-12 rounded-full bg-stone-700 text-white text-xl flex items-center justify-center hover:bg-stone-600 transition-all"
+          >
+            ⟳
+          </button>
+          <button
+            onClick={() => switchMode()}
+            className="px-6 py-3 rounded-full bg-stone-700 text-white font-bold hover:bg-stone-600 transition-all"
+          >
+            {mode === "Focus" ? "Break" : "Focus"}
+          </button>
         </div>
       </div>
 
-      {/* 👥 MEMBER GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+      {/* MEMBERS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 w-full">
         {members.map((member) => {
           const isMe = member.id === user?.uid;
           const memberTasks = tasks.filter((t) => t.createdBy === member.email);
-          const progress = memberTasks.length === 0 ? 0 : Math.round((memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100);
+          const progress =
+            memberTasks.length === 0
+              ? 0
+              : Math.round((memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100);
 
           return (
             <div key={member.id} className="bg-stone-900 rounded-xl border border-stone-800 overflow-hidden shadow-xl flex flex-col h-[420px]">
+              {/* HEADER */}
               <div className="bg-[#556b2f] p-4 flex justify-between items-center shrink-0">
-                <h3 className="text-xs font-bold text-white truncate max-w-[120px]">{member.email?.split("@")[0]} {isMe && "(You)"}</h3>
+                <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
+                  {member.email?.split("@")[0]} {isMe && "(You)"}
+                </h3>
                 <div className="relative w-24 h-4 bg-black/30 rounded-full overflow-hidden border border-white/10">
                   <div className="h-full bg-white transition-all duration-500" style={{ width: `${progress}%` }} />
-                  <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black mix-blend-difference">{progress}%</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black mix-blend-difference">
+                    {progress}%
+                  </span>
                 </div>
               </div>
 
+              {/* TASKS */}
               <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
                 <ul className="space-y-3">
                   {memberTasks.map((t) => (
                     <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
-                      <input 
-                        type="checkbox" 
-                        checked={t.isCompleted} 
-                        disabled={!isMe} 
-                        onChange={() => updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), { isCompleted: !t.isCompleted })} 
-                        className="mt-1 accent-[#556b2f] w-4 h-4 cursor-pointer shrink-0" 
+                      <input
+                        type="checkbox"
+                        checked={t.isCompleted}
+                        disabled={!isMe}
+                        onChange={() =>
+                          updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), { isCompleted: !t.isCompleted })
+                        }
+                        className="mt-1 accent-[#556b2f] w-4 h-4 cursor-pointer shrink-0"
                       />
                       <span className={`text-base leading-tight flex-1 ${t.isCompleted ? "line-through text-stone-600" : "text-stone-300"}`}>
                         {t.text}
                       </span>
-                      {/* ❌ RED DELETE CROSS ON HOVER */}
                       {isMe && (
                         <button
                           onClick={() => deleteDoc(doc(db, "rooms", roomId!, "tasks", t.id))}
@@ -191,9 +277,30 @@ export default function Room() {
                 </ul>
               </div>
 
+              {/* ADD TASK */}
               {isMe && (
-                <form onSubmit={(e) => { e.preventDefault(); if (newTaskInput.trim()) { addDoc(collection(db, "rooms", roomId!, "tasks"), { text: newTaskInput, isCompleted: false, createdBy: user.email, createdAt: Date.now() }); setNewTaskInput(""); } }} className="p-4 border-t border-stone-800 flex gap-2">
-                  <input type="text" value={newTaskInput} onChange={(e) => setNewTaskInput(e.target.value)} placeholder="Add task..." className="flex-1 bg-stone-800 text-xs p-2.5 rounded-lg outline-none border border-stone-700 focus:border-[#556b2f]" />
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newTaskInput.trim()) {
+                      addDoc(collection(db, "rooms", roomId!, "tasks"), {
+                        text: newTaskInput,
+                        isCompleted: false,
+                        createdBy: user.email,
+                        createdAt: Date.now(),
+                      });
+                      setNewTaskInput("");
+                    }
+                  }}
+                  className="p-4 border-t border-stone-800 flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={newTaskInput}
+                    onChange={(e) => setNewTaskInput(e.target.value)}
+                    placeholder="Add task..."
+                    className="flex-1 bg-stone-800 text-xs p-2.5 rounded-lg outline-none border border-stone-700 focus:border-[#556b2f]"
+                  />
                   <button className="bg-stone-700 px-4 rounded text-white font-bold">+</button>
                 </form>
               )}
