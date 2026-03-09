@@ -21,7 +21,8 @@ import { useTimer } from "../hooks/useTimer";
 interface Member {
   id: string;
   email: string | null;
-  status?: string; // Added status field
+  status?: string;
+  nickname?: string;
 }
 
 interface Task {
@@ -140,7 +141,8 @@ export default function Room() {
     setDoc(memberRef, {
       email: user.email,
       joinedAt: new Date(),
-      status: !isRunning ? "Paused" : mode, // initial status
+      status: !isRunning ? "Paused" : mode,
+      nickname: user.email?.split("@")[0],
     });
 
     return () => {
@@ -161,6 +163,7 @@ export default function Room() {
                 id: d.id,
                 email: d.data().email,
                 status: d.data().status || "Offline",
+                nickname: d.data().nickname || d.data().email?.split("@")[0],
               } as Member),
           ),
         ),
@@ -242,35 +245,37 @@ export default function Room() {
               const isMe = m.id === user?.uid;
               const status = m.status || "Offline";
 
-              let dotColor = "";
-              switch (status) {
-                case "Focus":
-                  dotColor = "bg-green-500";
-                  break;
-                case "Break":
-                  dotColor = "bg-yellow-400";
-                  break;
-                case "Paused":
-                  dotColor = "bg-indigo-500";
-                  break;
-                case "Offline":
-                default:
-                  dotColor = "bg-gray-400";
-                  break;
-              }
-
               return (
                 <li
                   key={m.id}
                   className="text-sm font-medium text-slate-800 flex justify-between items-center"
                 >
                   <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={m.nickname}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMembers((prev) =>
+                          prev.map((x) =>
+                            x.id === m.id ? { ...x, nickname: val } : x,
+                          ),
+                        );
+                        updateDoc(
+                          doc(db, "rooms", roomId!, "members", m.id),
+                          { nickname: val },
+                        ).catch(() => {});
+                      }}
+                      className="text-sm font-medium text-slate-800 bg-white/30 rounded px-1 py-0.5 w-[120px]"
+                    />
                     <span>
-                      {m.email?.split("@")[0]} -{" "}
-                      {m.status === "Focus" ? "📖 Focus" :
-                      m.status === "Break" ? "☕ Break" :
-                      m.status === "Paused" ? "⏸️ Paused" :
-                      "❌ Offline"}
+                      {status === "Focus"
+                        ? "📖 Focus"
+                        : status === "Break"
+                        ? "☕ Break"
+                        : status === "Paused"
+                        ? "⏸️ Paused"
+                        : "❌ Offline"}
                     </span>
                   </div>
                   {isMe && <span className="text-xs text-indigo-500">(You)</span>}
@@ -466,7 +471,7 @@ export default function Room() {
               >
                 <div className="bg-indigo-300 hover:bg-indigo-400 p-4 flex justify-between items-center">
                   <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
-                    {member.email?.split("@")[0]} {isMe && "(You)"}
+                    {member.nickname} {isMe && "(You)"}
                   </h3>
 
                   <div className="relative w-24 h-4 bg-white/30 rounded-full overflow-hidden">
