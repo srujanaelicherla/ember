@@ -15,7 +15,7 @@ export default function Signup() {
       await createUserWithEmailAndPassword(auth, email, password);
       navigate("/dashboard");
     } catch (error: unknown) {
-    if (error instanceof Error) {
+      if (error instanceof Error) {
         alert(error.message);
       } else {
         alert("Something went wrong");
@@ -24,10 +24,10 @@ export default function Signup() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black text-white">
+    <div className="flex items-center justify-center min-h-screen bg-black text-white px-4">
       <form
         onSubmit={handleSignup}
-        className="bg-neutral-900 p-8 rounded-xl w-80 space-y-4"
+        className="bg-neutral-900 p-8 rounded-xl w-full max-w-xs space-y-4"
       >
         <h2 className="text-2xl font-bold text-center">Create Ember Account</h2>
 

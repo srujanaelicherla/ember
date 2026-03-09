@@ -139,7 +139,7 @@ export default function Room() {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-stone-950 flex items-center justify-center text-stone-500 font-mono text-xs tracking-widest uppercase italic">
+      <div className="min-h-screen w-full bg-stone-950 text-stone-200 p-8 flex flex-col items-center px-4">
         Updating UI Components...
       </div>
     );
