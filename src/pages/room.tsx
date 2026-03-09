@@ -38,6 +38,7 @@ export default function Room() {
   const [members, setMembers] = useState<Member[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskInput, setNewTaskInput] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const {
     mode,
@@ -71,7 +72,14 @@ export default function Room() {
         particleCount: 200,
         spread: 160,
         origin: { y: 0.6 },
-        colors: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
+        colors: [
+          "#FF0000",
+          "#00FF00",
+          "#0000FF",
+          "#FFFF00",
+          "#FF00FF",
+          "#00FFFF",
+        ],
       });
     }
     prevProgressRef.current = currentProgress;
@@ -106,13 +114,13 @@ export default function Room() {
       collection(db, "rooms", roomId, "members"),
       (s) =>
         setMembers(
-          s.docs.map((d) => ({ id: d.id, email: d.data().email } as Member))
-        )
+          s.docs.map((d) => ({ id: d.id, email: d.data().email }) as Member),
+        ),
     );
 
     const tasksQuery = query(
       collection(db, "rooms", roomId, "tasks"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
 
     const unsubTasks = onSnapshot(tasksQuery, (s) =>
@@ -125,9 +133,9 @@ export default function Room() {
               isCompleted: d.data().isCompleted,
               createdBy: d.data().createdBy,
               createdAt: d.data().createdAt,
-            } as Task)
-        )
-      )
+            }) as Task,
+        ),
+      ),
     );
 
     return () => {
@@ -137,9 +145,9 @@ export default function Room() {
   }, [roomId]);
 
   const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60)
+    `${Math.floor(s / 60)
       .toString()
-      .padStart(2, "0")}`;
+      .padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   if (loading)
     return (
@@ -150,28 +158,42 @@ export default function Room() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 p-8 flex flex-col items-center">
-
       {/* ROOM CODE */}
-      <div className="flex flex-col items-start mb-6 max-w-sm w-full">
-        <span className="text-xs text-slate-600 uppercase tracking-widest mb-1">
+      <div className="flex flex-col items-center mb-8 w-full max-w-sm">
+        <span className="text-xs text-slate-600 uppercase tracking-widest mb-2">
           Room Code
         </span>
 
-        <div className="flex items-center gap-2 bg-white/60 backdrop-blur px-4 py-2 rounded border border-white/40">
-          <span className="font-mono font-bold text-slate-800">{roomId}</span>
+        <div
+          className="flex items-center justify-between w-full
+  bg-white/70 backdrop-blur-md
+  border border-white/50
+  rounded-xl px-4 py-3 shadow-md"
+        >
+          <span className="font-mono text-lg font-bold text-slate-800 tracking-widest">
+            {roomId}
+          </span>
 
           <button
-            onClick={() => navigator.clipboard.writeText(roomId || "")}
-            className="p-1 hover:bg-white/60 rounded transition-all"
+            onClick={() => {
+              navigator.clipboard.writeText(roomId || "");
+              setCopied(true);
+
+              setTimeout(() => {
+                setCopied(false);
+              }, 1000);
+            }}
+            className="ml-4 px-3 py-1.5 text-xs font-semibold
+  bg-purple-300 text-white rounded-lg
+  hover:bg-purple-400 transition"
           >
-            COPY
+            {copied ? "Copied!" : "Copy"}
           </button>
         </div>
       </div>
 
       {/* TIMER */}
-      <div className="flex flex-col items-center justify-center bg-white/50 backdrop-blur border border-white/40 rounded-xl p-8 mb-12 shadow-xl max-w-2xl w-full">
-
+      <div className="flex flex-col items-center justify-center bg-white/50 backdrop-blur rounded-xl p-8 mb-12 shadow-xl max-w-2xl w-full">
         <div className="text-sm uppercase tracking-widest text-slate-600 mb-2">
           {mode}
         </div>
@@ -182,7 +204,6 @@ export default function Room() {
 
         {!isRunning && (
           <div className="flex gap-10 mb-8">
-
             <div className="flex flex-col items-center">
               <span className="text-xs text-slate-600 mb-2">Focus</span>
 
@@ -196,7 +217,7 @@ export default function Room() {
                   setFInput(val.toString());
                   updateSettings(val, parseInt(bInput) || 5);
                 }}
-                className="w-16 text-center bg-white/70 rounded p-2 outline-none border border-white/50"
+                className="w-16 text-center bg-white/70 rounded p-2 outline-none"
               />
             </div>
 
@@ -213,15 +234,13 @@ export default function Room() {
                   setBInput(val.toString());
                   updateSettings(parseInt(fInput) || 25, val);
                 }}
-                className="w-16 text-center bg-white/70 rounded p-2 outline-none border border-white/50"
+                className="w-16 text-center bg-white/70 rounded p-2 outline-none"
               />
             </div>
-
           </div>
         )}
 
         <div className="flex gap-6 items-center">
-
           <button
             onClick={() => (isRunning ? pauseTimer() : startTimer())}
             className="w-16 h-16 rounded-full bg-indigo-300 hover:bg-indigo-400 text-white text-2xl flex items-center justify-center hover:scale-105 transition"
@@ -242,15 +261,12 @@ export default function Room() {
           >
             {mode === "Focus" ? "Break" : "Focus"}
           </button>
-
         </div>
       </div>
 
       {/* MEMBERS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 w-full">
-
         {members.map((member) => {
-
           const isMe = member.id === user?.uid;
 
           const memberTasks = tasks.filter((t) => t.createdBy === member.email);
@@ -261,17 +277,15 @@ export default function Room() {
               : Math.round(
                   (memberTasks.filter((t) => t.isCompleted).length /
                     memberTasks.length) *
-                    100
+                    100,
                 );
 
           return (
             <div
               key={member.id}
-              className="bg-white/60 backdrop-blur rounded-xl border border-white/40 shadow-xl flex flex-col h-[420px]"
+              className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[420px]"
             >
-
               <div className="bg-indigo-300 hover:bg-indigo-400 p-4 flex justify-between items-center">
-
                 <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
                   {member.email?.split("@")[0]} {isMe && "(You)"}
                 </h3>
@@ -286,17 +300,16 @@ export default function Room() {
                     {progress}%
                   </span>
                 </div>
-
               </div>
 
               {/* TASKS */}
               <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
-
                 <ul className="space-y-3">
-
                   {memberTasks.map((t) => (
-                    <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
-
+                    <li
+                      key={t.id}
+                      className="flex items-start gap-3 group min-h-[28px]"
+                    >
                       <input
                         type="checkbox"
                         checked={t.isCompleted}
@@ -329,12 +342,9 @@ export default function Room() {
                           ✕
                         </button>
                       )}
-
                     </li>
                   ))}
-
                 </ul>
-
               </div>
 
               {isMe && (
@@ -351,28 +361,24 @@ export default function Room() {
                       setNewTaskInput("");
                     }
                   }}
-                  className="p-4 border-t border-white/40 flex gap-2"
+                  className="p-4 flex gap-2"
                 >
-
                   <input
                     type="text"
                     value={newTaskInput}
                     onChange={(e) => setNewTaskInput(e.target.value)}
                     placeholder="Add task..."
-                    className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none border border-white/40"
+                    className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none"
                   />
 
                   <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold">
                     +
                   </button>
-
                 </form>
               )}
-
             </div>
           );
         })}
-
       </div>
 
       <style>{`

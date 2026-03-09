@@ -35,14 +35,14 @@ export default function Login() {
         shadow-2xl rounded-2xl p-8"
       >
         <h2 className="text-2xl font-bold text-center text-slate-700">
-          Welcome Back
+          Welcome to Ember!
         </h2>
 
         <input
           type="email"
           placeholder="Email"
           className="w-full p-2 rounded-lg
-          bg-white/60 border border-white/50
+          bg-white/60 border border-white/50 text-slate-800
           focus:outline-none focus:ring-2 focus:ring-purple-300"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -53,7 +53,7 @@ export default function Login() {
           type="password"
           placeholder="Password"
           className="w-full p-2 rounded-lg
-          bg-white/60 border border-white/50
+          bg-white/60 border border-white/50 text-slate-800
           focus:outline-none focus:ring-2 focus:ring-purple-300"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
