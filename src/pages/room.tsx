@@ -409,7 +409,7 @@ export default function Room() {
                   <div className="flex flex-col gap-1 relative max-w-xs">
                     {repliedMessage && (
                       <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">
-                        Replying to: {repliedMessage.text}
+                        {repliedMessage.text}
                       </div>
                     )}
 
