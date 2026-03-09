@@ -473,7 +473,7 @@ export default function Room() {
           >
             {replyingTo && (
               <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-100 rounded flex justify-between items-center">
-                Replying to: {replyingTo.text}
+                {replyingTo.text}
                 <button
                   type="button"
                   className="text-red-500 ml-2"
