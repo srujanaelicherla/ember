@@ -38,6 +38,7 @@ interface ChatMessage {
   text: string;
   sender: string | null;
   createdAt: number;
+  replyTo?: string | null; // NEW: reply feature
 }
 
 export default function Room() {
@@ -53,6 +54,7 @@ export default function Room() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null); // NEW
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -105,7 +107,6 @@ export default function Room() {
     prevProgressRef.current = currentProgress;
   }, [tasks, user]);
 
-  // Update member status in Firestore whenever mode or isRunning changes
   useEffect(() => {
     if (!user || !roomId) return;
 
@@ -164,7 +165,7 @@ export default function Room() {
                 email: d.data().email,
                 status: d.data().status || "Offline",
                 nickname: d.data().nickname || d.data().email?.split("@")[0],
-              } as Member),
+              }) as Member,
           ),
         ),
     );
@@ -203,6 +204,7 @@ export default function Room() {
               text: d.data().text,
               sender: d.data().sender,
               createdAt: d.data().createdAt,
+              replyTo: d.data().replyTo || null, // NEW
             }) as ChatMessage,
         ),
       ),
@@ -261,10 +263,9 @@ export default function Room() {
                             x.id === m.id ? { ...x, nickname: val } : x,
                           ),
                         );
-                        updateDoc(
-                          doc(db, "rooms", roomId!, "members", m.id),
-                          { nickname: val },
-                        ).catch(() => {});
+                        updateDoc(doc(db, "rooms", roomId!, "members", m.id), {
+                          nickname: val,
+                        }).catch(() => {});
                       }}
                       className="text-sm font-medium text-slate-800 bg-white/30 rounded px-1 py-0.5 w-[120px]"
                     />
@@ -272,13 +273,15 @@ export default function Room() {
                       {status === "Focus"
                         ? "📖 Focus"
                         : status === "Break"
-                        ? "☕ Break"
-                        : status === "Paused"
-                        ? "⏸️ Paused"
-                        : "❌ Offline"}
+                          ? "☕ Break"
+                          : status === "Paused"
+                            ? "⏸️ Paused"
+                            : "❌ Offline"}
                     </span>
                   </div>
-                  {isMe && <span className="text-xs text-indigo-500">(You)</span>}
+                  {isMe && (
+                    <span className="text-xs text-indigo-500">(You)</span>
+                  )}
                 </li>
               );
             })}
@@ -389,26 +392,53 @@ export default function Room() {
           <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
             {messages.map((m) => {
               const isMe = m.sender === user?.email;
+              const repliedMessage = m.replyTo
+                ? messages.find((msg) => msg.id === m.replyTo)
+                : null;
 
               return (
                 <div
                   key={m.id}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+                  onDoubleClick={() => setReplyingTo(m)}
                 >
-                  <div
-                    className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
-                      isMe
-                        ? "bg-indigo-300 text-white"
-                        : "bg-white text-slate-700"
-                    }`}
-                  >
-                    {!isMe && (
-                      <div className="text-[10px] opacity-60 mb-1">
-                        {m.sender?.split("@")[0]}
+                  <div className="flex flex-col gap-1 relative max-w-xs">
+                    {repliedMessage && (
+                      <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">
+                        Replying to: {repliedMessage.text}
                       </div>
                     )}
 
-                    {m.text}
+                    <div
+                      className={`px-4 py-2 rounded-lg text-sm ${
+                        isMe
+                          ? "bg-indigo-300 text-white"
+                          : "bg-white text-slate-700"
+                      }`}
+                    >
+                      {m.text}
+
+                      {/* REPLY ICON */}
+                      <button
+                        onClick={() => setReplyingTo(m)}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:scale-110 transition"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="h-4 w-4 text-indigo-500"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -420,29 +450,44 @@ export default function Room() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-
               if (!chatInput.trim()) return;
 
               addDoc(collection(db, "rooms", roomId!, "chat"), {
                 text: chatInput,
                 sender: user?.email,
                 createdAt: serverTimestamp(),
+                replyTo: replyingTo?.id || null,
               });
 
               setChatInput("");
+              setReplyingTo(null);
             }}
-            className="p-4 flex gap-2 border-t border-white/40"
+            className="p-4 flex gap-2 flex-col border-t border-white/40"
           >
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Send message..."
-              className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none"
-            />
+            {replyingTo && (
+              <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-100 rounded flex justify-between items-center">
+                Replying to: {replyingTo.text}
+                <button
+                  type="button"
+                  className="text-red-500 ml-2"
+                  onClick={() => setReplyingTo(null)}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
-            <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold">
-              Send
-            </button>
+            <div className="flex gap-2">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Send message..."
+                className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none"
+              />
+              <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold">
+                Send
+              </button>
+            </div>
           </form>
         </div>
 
