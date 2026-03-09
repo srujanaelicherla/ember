@@ -57,6 +57,7 @@ export default function Room() {
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null); // NEW
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     mode,
@@ -400,7 +401,10 @@ export default function Room() {
                 <div
                   key={m.id}
                   className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
-                  onDoubleClick={() => setReplyingTo(m)}
+                  onDoubleClick={() => {
+                    setReplyingTo(m);
+                    chatInputRef.current?.focus(); // focus input immediately
+                  }}
                 >
                   <div className="flex flex-col gap-1 relative max-w-xs">
                     {repliedMessage && (
@@ -420,7 +424,10 @@ export default function Room() {
 
                       {/* REPLY ICON */}
                       <button
-                        onClick={() => setReplyingTo(m)}
+                        onClick={() => {
+                          setReplyingTo(m);
+                          chatInputRef.current?.focus();
+                        }}
                         className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:scale-110 transition"
                       >
                         <svg
@@ -479,6 +486,7 @@ export default function Room() {
 
             <div className="flex gap-2">
               <input
+                ref={chatInputRef} 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Send message..."
