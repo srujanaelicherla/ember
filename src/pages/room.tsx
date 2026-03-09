@@ -21,6 +21,7 @@ import { useTimer } from "../hooks/useTimer";
 interface Member {
   id: string;
   email: string | null;
+  status?: string; // Added status field
 }
 
 interface Task {
@@ -103,6 +104,17 @@ export default function Room() {
     prevProgressRef.current = currentProgress;
   }, [tasks, user]);
 
+  // Update member status in Firestore whenever mode or isRunning changes
+  useEffect(() => {
+    if (!user || !roomId) return;
+
+    const memberRef = doc(db, "rooms", roomId, "members", user.uid);
+
+    const status = !isRunning ? "Paused" : mode;
+
+    updateDoc(memberRef, { status }).catch(() => {});
+  }, [mode, isRunning, user, roomId]);
+
   useEffect(() => {
     async function checkRoom() {
       if (!roomId) return;
@@ -128,12 +140,13 @@ export default function Room() {
     setDoc(memberRef, {
       email: user.email,
       joinedAt: new Date(),
+      status: !isRunning ? "Paused" : mode, // initial status
     });
 
     return () => {
       deleteDoc(memberRef).catch(() => {});
     };
-  }, [roomId, user]);
+  }, [roomId, user, isRunning, mode]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -142,7 +155,14 @@ export default function Room() {
       collection(db, "rooms", roomId, "members"),
       (s) =>
         setMembers(
-          s.docs.map((d) => ({ id: d.id, email: d.data().email }) as Member),
+          s.docs.map(
+            (d) =>
+              ({
+                id: d.id,
+                email: d.data().email,
+                status: d.data().status || "Offline",
+              } as Member),
+          ),
         ),
     );
 
@@ -218,17 +238,45 @@ export default function Room() {
             Members
           </span>
           <ul className="space-y-2">
-            {members.map((m) => (
-              <li
-                key={m.id}
-                className="text-sm font-medium text-slate-800 flex justify-between items-center"
-              >
-                <span>{m.email?.split("@")[0]}</span>
-                {m.id === user?.uid && (
-                  <span className="text-xs text-indigo-500">(You)</span>
-                )}
-              </li>
-            ))}
+            {members.map((m) => {
+              const isMe = m.id === user?.uid;
+              const status = m.status || "Offline";
+
+              let dotColor = "";
+              switch (status) {
+                case "Focus":
+                  dotColor = "bg-green-500";
+                  break;
+                case "Break":
+                  dotColor = "bg-yellow-400";
+                  break;
+                case "Paused":
+                  dotColor = "bg-indigo-500";
+                  break;
+                case "Offline":
+                default:
+                  dotColor = "bg-gray-400";
+                  break;
+              }
+
+              return (
+                <li
+                  key={m.id}
+                  className="text-sm font-medium text-slate-800 flex justify-between items-center"
+                >
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {m.email?.split("@")[0]} -{" "}
+                      {m.status === "Focus" ? "📖 Focus" :
+                      m.status === "Break" ? "☕ Break" :
+                      m.status === "Paused" ? "⏸️ Paused" :
+                      "❌ Offline"}
+                    </span>
+                  </div>
+                  {isMe && <span className="text-xs text-indigo-500">(You)</span>}
+                </li>
+              );
+            })}
           </ul>
         </div>
 
