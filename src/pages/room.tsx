@@ -82,7 +82,7 @@ export default function Room() {
   const [bInput, setBInput] = useState("5");
   const prevProgressRef = useRef<number>(0);
 
-  // --- 1. CORE FUNCTIONS (Declared early to avoid hoisting errors) ---
+  // --- 1. CORE FUNCTIONS ---
 
   const saveRoomToDashboard = async () => {
     if (!user || !roomId) return;
@@ -116,7 +116,6 @@ export default function Room() {
 
   // --- 2. EFFECTS ---
 
-  // Check room validity and owner
   useEffect(() => {
     async function checkRoom() {
       if (!roomId) return;
@@ -129,7 +128,6 @@ export default function Room() {
       setRoomName(data.name || "Untitled Room");
       setOwnerId(data.createdBy || "");
 
-      // Init timer meta if missing
       const timerRef = doc(db, "rooms", roomId, "meta", "timer");
       const timerSnap = await getDoc(timerRef);
       if (!timerSnap.exists()) {
@@ -146,7 +144,6 @@ export default function Room() {
     checkRoom();
   }, [roomId, navigate]);
 
-  // Sync Timer Inputs
   useEffect(() => {
     setFInput(Math.floor(durations.focus / 60).toString());
     setBInput(Math.floor(durations.break / 60).toString());
@@ -161,14 +158,13 @@ export default function Room() {
     return () => unsubSaved();
   }, [roomId, user]);
 
-  // AUTO-JOIN LOGIC (Fixes the "unable to re-join via code" issue)
+  // THE RE-JOIN FIX: If you are in the room, ensure you are saved as a member
   useEffect(() => {
-    if (!loading && user && roomId && !isSaved) {
+    if (!loading && user && roomId) {
       saveRoomToDashboard();
     }
-  }, [loading, user, roomId, isSaved]);
+  }, [loading, user, roomId]);
 
-  // Confetti on Progress
   useEffect(() => {
     if (!user || tasks.length === 0) return;
     const myTasks = tasks.filter((t) => t.createdBy === user.email);
@@ -186,7 +182,6 @@ export default function Room() {
     prevProgressRef.current = currentProgress;
   }, [tasks, user]);
 
-  // Sync Member Status
   useEffect(() => {
     if (!user || !roomId || !isSaved) return;
     const memberRef = doc(db, "rooms", roomId, "members", user.uid);
@@ -194,7 +189,6 @@ export default function Room() {
     updateDoc(memberRef, { status }).catch(() => {});
   }, [mode, isRunning, user, roomId, isSaved]);
 
-  // Main Room Data Subscriptions
   useEffect(() => {
     if (!roomId) return;
     const unsubRoom = onSnapshot(doc(db, "rooms", roomId), (snap) => {
@@ -240,7 +234,6 @@ export default function Room() {
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 p-6 flex flex-col">
       
-      {/* HEADER NAVIGATION */}
       <div className="flex justify-between items-center mb-6">
         <button 
           onClick={() => navigate('/dashboard')} 
@@ -250,22 +243,19 @@ export default function Room() {
         </button>
 
         {!isSaved ? (
-          <button 
-            onClick={saveRoomToDashboard}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-400 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition shadow-md animate-pulse"
-          >
-            💾 Save to Dashboard
-          </button>
+          <span className="px-4 py-2 bg-indigo-100 text-indigo-600 rounded-lg text-sm font-bold animate-pulse">
+            ⚡ Syncing Room...
+          </span>
         ) : (
           <span className="px-4 py-2 bg-green-100/50 text-green-700 rounded-lg text-sm font-bold border border-green-200">
-            ✓ Room Saved
+            ✓ Saved in History
           </span>
         )}
       </div>
 
       <div className="flex w-full gap-6 mb-6 items-start">
         {/* MEMBERS LIST */}
-        <div className="w-[400px] h-[290px] flex flex-col bg-white/60 backdrop-blur rounded-xl shadow-xl p-4 max-h-[300px] overflow-y-auto">
+        <div className="w-[400px] h-[290px] flex flex-col bg-white/60 backdrop-blur rounded-xl shadow-xl p-4 max-h-[300px] overflow-y-auto custom-scrollbar">
           <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">Members</span>
           <ul className="space-y-2">
             {members.map((m) => {
@@ -313,7 +303,7 @@ export default function Room() {
                     setFInput(val.toString());
                     updateSettings(val, parseInt(bInput) || 5);
                   }}
-                  className="w-16 text-center bg-white/70 rounded p-2 outline-none font-bold"
+                  className="w-16 text-center bg-white/70 rounded p-2 outline-none font-bold shadow-sm"
                 />
               </div>
               <div className="flex flex-col items-center">
@@ -328,7 +318,7 @@ export default function Room() {
                     setBInput(val.toString());
                     updateSettings(parseInt(fInput) || 25, val);
                   }}
-                  className="w-16 text-center bg-white/70 rounded p-2 outline-none font-bold"
+                  className="w-16 text-center bg-white/70 rounded p-2 outline-none font-bold shadow-sm"
                 />
               </div>
             </div>
@@ -424,7 +414,7 @@ export default function Room() {
         </div>
 
         {/* TASK BOARDS */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto pr-2">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto pr-2 custom-scrollbar">
           {members.map((member) => {
             const isMe = member.id === user?.uid;
             const memberTasks = tasks.filter((t) => t.createdBy === member.email);
@@ -485,7 +475,7 @@ export default function Room() {
                     }
                   }} className="p-4 flex gap-2 border-t border-white/10">
                     <input type="text" value={newTaskInput} onChange={(e) => setNewTaskInput(e.target.value)} placeholder="Add task..." className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none" />
-                    <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold transition">+</button>
+                    <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold transition shadow-sm">+</button>
                   </form>
                 )}
               </div>
