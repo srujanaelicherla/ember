@@ -76,7 +76,7 @@ export default function Room() {
     resetTimer,
     switchMode,
     updateSettings,
-  } = useTimer(roomId);
+  } = useTimer(roomId, user?.uid);
 
   const [fInput, setFInput] = useState("25");
   const [bInput, setBInput] = useState("5");
