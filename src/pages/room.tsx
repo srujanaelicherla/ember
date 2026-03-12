@@ -38,7 +38,7 @@ interface ChatMessage {
   text: string;
   sender: string | null;
   createdAt: number;
-  replyTo?: string | null; // NEW: reply feature
+  replyTo?: string | null;
 }
 
 export default function Room() {
@@ -52,9 +52,13 @@ export default function Room() {
   const [newTaskInput, setNewTaskInput] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // EDIT TASK STATE
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null); // NEW
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLInputElement | null>(null);
@@ -82,71 +86,64 @@ export default function Room() {
 
   useEffect(() => {
     if (!user || tasks.length === 0) return;
-
     const myTasks = tasks.filter((t) => t.createdBy === user.email);
     const completed = myTasks.filter((t) => t.isCompleted).length;
-
-    const currentProgress =
-      myTasks.length === 0 ? 0 : (completed / myTasks.length) * 100;
+    const currentProgress = myTasks.length === 0 ? 0 : (completed / myTasks.length) * 100;
 
     if (currentProgress >= 99.9 && prevProgressRef.current < 99.9) {
       confetti({
         particleCount: 200,
         spread: 160,
         origin: { y: 0.6 },
-        colors: [
-          "#FF0000",
-          "#00FF00",
-          "#0000FF",
-          "#FFFF00",
-          "#FF00FF",
-          "#00FFFF",
-        ],
+        colors: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
       });
     }
-
     prevProgressRef.current = currentProgress;
   }, [tasks, user]);
 
   useEffect(() => {
     if (!user || !roomId) return;
-
     const memberRef = doc(db, "rooms", roomId, "members", user.uid);
-
     const status = !isRunning ? "Paused" : mode;
-
     updateDoc(memberRef, { status }).catch(() => {});
   }, [mode, isRunning, user, roomId]);
 
   useEffect(() => {
     async function checkRoom() {
       if (!roomId) return;
-
-      const snapshot = await getDoc(doc(db, "rooms", roomId));
-
-      if (!snapshot.exists()) {
+      const roomSnap = await getDoc(doc(db, "rooms", roomId));
+      if (!roomSnap.exists()) {
         navigate("/dashboard");
         return;
       }
 
+      // INITIALIZE TIMER IF MISSING
+      const timerRef = doc(db, "rooms", roomId, "meta", "timer");
+      const timerSnap = await getDoc(timerRef);
+      if (!timerSnap.exists()) {
+        await setDoc(timerRef, {
+          mode: "Focus",
+          timeLeft: 1500,
+          isRunning: false,
+          durations: { focus: 1500, break: 300, longBreak: 900 },
+          endsAt: null
+        });
+      }
+
       setLoading(false);
     }
-
     checkRoom();
   }, [roomId, navigate]);
 
   useEffect(() => {
     if (!roomId || !user) return;
-
     const memberRef = doc(db, "rooms", roomId, "members", user.uid);
-
     setDoc(memberRef, {
       email: user.email,
       joinedAt: new Date(),
       status: !isRunning ? "Paused" : mode,
       nickname: user.email?.split("@")[0],
     });
-
     return () => {
       deleteDoc(memberRef).catch(() => {});
     };
@@ -154,61 +151,35 @@ export default function Room() {
 
   useEffect(() => {
     if (!roomId) return;
-
-    const unsubMembers = onSnapshot(
-      collection(db, "rooms", roomId, "members"),
-      (s) =>
-        setMembers(
-          s.docs.map(
-            (d) =>
-              ({
-                id: d.id,
-                email: d.data().email,
-                status: d.data().status || "Offline",
-                nickname: d.data().nickname || d.data().email?.split("@")[0],
-              }) as Member,
-          ),
-        ),
+    const unsubMembers = onSnapshot(collection(db, "rooms", roomId, "members"), (s) =>
+      setMembers(s.docs.map((d) => ({
+        id: d.id,
+        email: d.data().email,
+        status: d.data().status || "Offline",
+        nickname: d.data().nickname || d.data().email?.split("@")[0],
+      }) as Member))
     );
 
-    const tasksQuery = query(
-      collection(db, "rooms", roomId, "tasks"),
-      orderBy("createdAt", "desc"),
-    );
-
+    const tasksQuery = query(collection(db, "rooms", roomId, "tasks"), orderBy("createdAt", "desc"));
     const unsubTasks = onSnapshot(tasksQuery, (s) =>
-      setTasks(
-        s.docs.map(
-          (d) =>
-            ({
-              id: d.id,
-              text: d.data().text,
-              isCompleted: d.data().isCompleted,
-              createdBy: d.data().createdBy,
-              createdAt: d.data().createdAt,
-            }) as Task,
-        ),
-      ),
+      setTasks(s.docs.map((d) => ({
+        id: d.id,
+        text: d.data().text,
+        isCompleted: d.data().isCompleted,
+        createdBy: d.data().createdBy,
+        createdAt: d.data().createdAt,
+      }) as Task))
     );
 
-    const chatQuery = query(
-      collection(db, "rooms", roomId, "chat"),
-      orderBy("createdAt", "asc"),
-    );
-
+    const chatQuery = query(collection(db, "rooms", roomId, "chat"), orderBy("createdAt", "asc"));
     const unsubChat = onSnapshot(chatQuery, (s) =>
-      setMessages(
-        s.docs.map(
-          (d) =>
-            ({
-              id: d.id,
-              text: d.data().text,
-              sender: d.data().sender,
-              createdAt: d.data().createdAt,
-              replyTo: d.data().replyTo || null, // NEW
-            }) as ChatMessage,
-        ),
-      ),
+      setMessages(s.docs.map((d) => ({
+        id: d.id,
+        text: d.data().text,
+        sender: d.data().sender,
+        createdAt: d.data().createdAt,
+        replyTo: d.data().replyTo || null,
+      }) as ChatMessage))
     );
 
     return () => {
@@ -222,67 +193,50 @@ export default function Room() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60)
-      .toString()
-      .padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+  const handleUpdateTask = async (id: string) => {
+    if (!editingText.trim() || !roomId) {
+      setEditingTaskId(null);
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "rooms", roomId, "tasks", id), { text: editingText.trim() });
+      setEditingTaskId(null);
+    } catch (error) {
+      console.error("Error updating task:", error);
+    }
+  };
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700">
-        Updating UI Components...
-      </div>
-    );
+  const formatTime = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700">Updating UI Components...</div>;
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 p-6 flex flex-col">
-      {/* TOP BAR */}
       <div className="flex w-full gap-6 mb-6 items-start">
         {/* MEMBERS LIST */}
         <div className="w-[400px] h-[290px] flex flex-col bg-white/60 backdrop-blur rounded-xl shadow-xl p-4 max-h-[300px] overflow-y-auto">
-          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2">
-            Members
-          </span>
+          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2">Members</span>
           <ul className="space-y-2">
             {members.map((m) => {
               const isMe = m.id === user?.uid;
               const status = m.status || "Offline";
-
               return (
-                <li
-                  key={m.id}
-                  className="text-sm font-medium text-slate-800 flex justify-between items-center"
-                >
+                <li key={m.id} className="text-sm font-medium text-slate-800 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={m.nickname}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setMembers((prev) =>
-                          prev.map((x) =>
-                            x.id === m.id ? { ...x, nickname: val } : x,
-                          ),
-                        );
-                        updateDoc(doc(db, "rooms", roomId!, "members", m.id), {
-                          nickname: val,
-                        }).catch(() => {});
+                        setMembers((p) => p.map((x) => (x.id === m.id ? { ...x, nickname: val } : x)));
+                        updateDoc(doc(db, "rooms", roomId!, "members", m.id), { nickname: val }).catch(() => {});
                       }}
                       className="text-sm font-medium text-slate-800 bg-white/30 rounded px-1 py-0.5 w-[120px]"
                     />
-                    <span>
-                      {status === "Focus"
-                        ? "📖 Focus"
-                        : status === "Break"
-                          ? "☕ Break"
-                          : status === "Paused"
-                            ? "⏸️ Paused"
-                            : "❌ Offline"}
-                    </span>
+                    <span>{status === "Focus" ? "📖 Focus" : status === "Break" ? "☕ Break" : status === "Paused" ? "⏸️ Paused" : "❌ Offline"}</span>
                   </div>
-                  {isMe && (
-                    <span className="text-xs text-indigo-500">(You)</span>
-                  )}
+                  {isMe && <span className="text-xs text-indigo-500">(You)</span>}
                 </li>
               );
             })}
@@ -291,13 +245,8 @@ export default function Room() {
 
         {/* TIMER */}
         <div className="flex-1 max-w-[700px] h-[290px] flex flex-col items-center justify-center bg-white/50 backdrop-blur rounded-xl p-6 shadow-xl">
-          <div className="text-xs uppercase tracking-widest text-slate-600 mb-2">
-            {mode}
-          </div>
-
-          <div className="text-6xl font-mono font-bold text-slate-700 mb-5">
-            {formatTime(timeLeft)}
-          </div>
+          <div className="text-xs uppercase tracking-widest text-slate-600 mb-2">{mode}</div>
+          <div className="text-6xl font-mono font-bold text-slate-700 mb-5">{formatTime(timeLeft)}</div>
 
           {!isRunning && (
             <div className="flex gap-6 mb-5">
@@ -316,7 +265,6 @@ export default function Room() {
                   className="w-16 text-center bg-white/70 rounded p-2 outline-none"
                 />
               </div>
-
               <div className="flex flex-col items-center">
                 <span className="text-xs text-slate-600 mb-1">Break</span>
                 <input
@@ -342,32 +290,16 @@ export default function Room() {
             >
               {isRunning ? "❚❚" : "▶"}
             </button>
-
-            <button
-              onClick={() => resetTimer()}
-              className="w-10 h-10 rounded-full bg-white/70 text-slate-700 text-lg flex items-center justify-center"
-            >
-              ⟳
-            </button>
-
-            <button
-              onClick={() => switchMode()}
-              className="px-5 py-2 rounded-full bg-indigo-300 hover:bg-indigo-400 text-white font-semibold"
-            >
-              {mode === "Focus" ? "Break" : "Focus"}
-            </button>
+            <button onClick={() => resetTimer()} className="w-10 h-10 rounded-full bg-white/70 text-slate-700 text-lg flex items-center justify-center">⟳</button>
+            <button onClick={() => switchMode()} className="px-5 py-2 rounded-full bg-indigo-300 hover:bg-indigo-400 text-white font-semibold">{mode === "Focus" ? "Break" : "Focus"}</button>
           </div>
         </div>
 
         {/* ROOM CODE */}
         <div className="w-[350px] flex flex-col justify-center bg-white/60 backdrop-blur rounded-xl shadow-xl p-4">
-          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2">
-            Room Code
-          </span>
+          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2">Room Code</span>
           <div className="flex items-center justify-between bg-white/80 border border-white/50 rounded-lg px-3 py-2 shadow">
-            <span className="font-mono text-base font-bold text-slate-800 tracking-widest truncate">
-              {roomId}
-            </span>
+            <span className="font-mono text-base font-bold text-slate-800 tracking-widest truncate">{roomId}</span>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(roomId || "");
@@ -382,119 +314,41 @@ export default function Room() {
         </div>
       </div>
 
-      {/* MAIN AREA */}
       <div className="flex flex-1 gap-6">
         {/* CHAT SIDEBAR */}
         <div className="w-[400px] h-[520px] bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col">
-          <div className="bg-indigo-100 text-slate font-bold p-4 rounded-t-xl">
-            Room Chat
-          </div>
-
+          <div className="bg-indigo-100 text-slate font-bold p-4 rounded-t-xl">Room Chat</div>
           <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
             {messages.map((m) => {
               const isMe = m.sender === user?.email;
-              const repliedMessage = m.replyTo
-                ? messages.find((msg) => msg.id === m.replyTo)
-                : null;
-
+              const repliedMessage = m.replyTo ? messages.find((msg) => msg.id === m.replyTo) : null;
               return (
-                <div
-                  key={m.id}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
-                  onDoubleClick={() => {
-                    setReplyingTo(m);
-                    chatInputRef.current?.focus(); // focus input immediately
-                  }}
-                >
+                <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"} group`} onDoubleClick={() => { setReplyingTo(m); chatInputRef.current?.focus(); }}>
                   <div className="flex flex-col gap-1 relative max-w-xs">
-                    {repliedMessage && (
-                      <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">
-                        {repliedMessage.text}
-                      </div>
-                    )}
-
-                    <div
-                      className={`px-4 py-2 rounded-lg text-sm ${
-                        isMe
-                          ? "bg-indigo-300 text-white"
-                          : "bg-white text-slate-700"
-                      }`}
-                    >
+                    {repliedMessage && <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">{repliedMessage.text}</div>}
+                    <div className={`px-4 py-2 rounded-lg text-sm ${isMe ? "bg-indigo-300 text-white" : "bg-white text-slate-700"}`}>
                       {m.text}
-
-                      {/* REPLY ICON */}
-                      <button
-                        onClick={() => {
-                          setReplyingTo(m);
-                          chatInputRef.current?.focus();
-                        }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:scale-110 transition"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="h-4 w-4 text-indigo-500"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
-                          />
-                        </svg>
+                      <button onClick={() => { setReplyingTo(m); chatInputRef.current?.focus(); }} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:scale-110 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 text-indigo-500"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
                       </button>
                     </div>
                   </div>
                 </div>
               );
             })}
-
             <div ref={chatBottomRef} />
           </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!chatInput.trim()) return;
-
-              addDoc(collection(db, "rooms", roomId!, "chat"), {
-                text: chatInput,
-                sender: user?.email,
-                createdAt: serverTimestamp(),
-                replyTo: replyingTo?.id || null,
-              });
-
-              setChatInput("");
-              setReplyingTo(null);
-            }}
-            className="p-4 flex gap-2 flex-col border-t border-white/40"
-          >
-            {replyingTo && (
-              <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-100 rounded flex justify-between items-center">
-                {replyingTo.text}
-                <button
-                  type="button"
-                  className="text-red-500 ml-2"
-                  onClick={() => setReplyingTo(null)}
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (!chatInput.trim()) return;
+            addDoc(collection(db, "rooms", roomId!, "chat"), { text: chatInput, sender: user?.email, createdAt: serverTimestamp(), replyTo: replyingTo?.id || null });
+            setChatInput("");
+            setReplyingTo(null);
+          }} className="p-4 flex gap-2 flex-col border-t border-white/40">
+            {replyingTo && <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-100 rounded flex justify-between items-center">{replyingTo.text}<button type="button" className="text-red-500 ml-2" onClick={() => setReplyingTo(null)}>✕</button></div>}
             <div className="flex gap-2">
-              <input
-                ref={chatInputRef} 
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Send message..."
-                className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none"
-              />
-              <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold">
-                Send
-              </button>
+              <input ref={chatInputRef} value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Send message..." className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none" />
+              <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold">Send</button>
             </div>
           </form>
         </div>
@@ -503,120 +357,65 @@ export default function Room() {
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto pr-2">
           {members.map((member) => {
             const isMe = member.id === user?.uid;
-
-            const memberTasks = tasks.filter(
-              (t) => t.createdBy === member.email,
-            );
-
-            const progress =
-              memberTasks.length === 0
-                ? 0
-                : Math.round(
-                    (memberTasks.filter((t) => t.isCompleted).length /
-                      memberTasks.length) *
-                      100,
-                  );
-
+            const memberTasks = tasks.filter((t) => t.createdBy === member.email);
+            const progress = memberTasks.length === 0 ? 0 : Math.round((memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100);
             return (
-              <div
-                key={member.id}
-                className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[320px]"
-              >
+              <div key={member.id} className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[320px]">
                 <div className="bg-indigo-300 hover:bg-indigo-400 p-4 flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
-                    {member.nickname} {isMe && "(You)"}
-                  </h3>
-
+                  <h3 className="text-xs font-bold text-white truncate max-w-[120px]">{member.nickname} {isMe && "(You)"}</h3>
                   <div className="relative w-24 h-4 bg-white/30 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-white"
-                      style={{ width: `${progress}%` }}
-                    />
-
-                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-700">
-                      {progress}%
-                    </span>
+                    <div className="h-full bg-white" style={{ width: `${progress}%` }} />
+                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-700">{progress}%</span>
                   </div>
                 </div>
-
                 <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
                   <ul className="space-y-3">
                     {memberTasks.map((t) => (
-                      <li
-                        key={t.id}
-                        className="flex items-start gap-3 group min-h-[28px]"
-                      >
+                      <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
                         <input
                           type="checkbox"
                           checked={t.isCompleted}
                           disabled={!isMe}
-                          onChange={() =>
-                            updateDoc(
-                              doc(db, "rooms", roomId!, "tasks", t.id),
-                              {
-                                isCompleted: !t.isCompleted,
-                              },
-                            )
-                          }
+                          onChange={() => updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), { isCompleted: !t.isCompleted })}
                           className="mt-1 accent-purple-400 w-4 h-4 cursor-pointer shrink-0"
                         />
-
-                        <span
-                          className={`text-base leading-tight flex-1 ${
-                            t.isCompleted
-                              ? "line-through text-slate-400"
-                              : "text-slate-700"
-                          }`}
-                        >
-                          {t.text}
-                        </span>
-
-                        {isMe && (
-                          <button
-                            onClick={() =>
-                              deleteDoc(
-                                doc(db, "rooms", roomId!, "tasks", t.id),
-                              )
-                            }
-                            className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-red-500 font-bold"
+                        {editingTaskId === t.id ? (
+                          <input
+                            autoFocus
+                            className="flex-1 bg-white/80 text-sm border-b border-indigo-300 outline-none"
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            onBlur={() => handleUpdateTask(t.id)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleUpdateTask(t.id); if (e.key === "Escape") setEditingTaskId(null); }}
+                          />
+                        ) : (
+                          <span
+                            className={`text-base leading-tight flex-1 ${t.isCompleted ? "line-through text-slate-400" : "text-slate-700"} ${isMe ? "cursor-pointer" : ""}`}
+                            onDoubleClick={() => { if (isMe) { setEditingTaskId(t.id); setEditingText(t.text); } }}
                           >
-                            ✕
-                          </button>
+                            {t.text}
+                          </span>
+                        )}
+                        {isMe && (
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {editingTaskId !== t.id && <button onClick={() => { setEditingTaskId(t.id); setEditingText(t.text); }} className="text-indigo-400 hover:text-indigo-600 text-xs p-0.5">✎</button>}
+                            <button onClick={() => deleteDoc(doc(db, "rooms", roomId!, "tasks", t.id))} className="text-red-400 p-0.5 hover:text-red-500 font-bold">✕</button>
+                          </div>
                         )}
                       </li>
                     ))}
                   </ul>
                 </div>
-
                 {isMe && (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-
-                      if (newTaskInput.trim()) {
-                        addDoc(collection(db, "rooms", roomId!, "tasks"), {
-                          text: newTaskInput,
-                          isCompleted: false,
-                          createdBy: user.email,
-                          createdAt: Date.now(),
-                        });
-
-                        setNewTaskInput("");
-                      }
-                    }}
-                    className="p-4 flex gap-2"
-                  >
-                    <input
-                      type="text"
-                      value={newTaskInput}
-                      onChange={(e) => setNewTaskInput(e.target.value)}
-                      placeholder="Add task..."
-                      className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none"
-                    />
-
-                    <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold">
-                      +
-                    </button>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newTaskInput.trim()) {
+                      addDoc(collection(db, "rooms", roomId!, "tasks"), { text: newTaskInput, isCompleted: false, createdBy: user.email, createdAt: Date.now() });
+                      setNewTaskInput("");
+                    }
+                  }} className="p-4 flex gap-2">
+                    <input type="text" value={newTaskInput} onChange={(e) => setNewTaskInput(e.target.value)} placeholder="Add task..." className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none" />
+                    <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold">+</button>
                   </form>
                 )}
               </div>
@@ -624,13 +423,7 @@ export default function Room() {
           })}
         </div>
       </div>
-
-      <style>{`
-      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5f5; border-radius: 10px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a5b4fc; }
-    `}</style>
+      <style>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5f5; border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a5b4fc; }`}</style>
     </div>
   );
 }

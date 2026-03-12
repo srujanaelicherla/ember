@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 type Mode = "Focus" | "Break" | "Long Break";
@@ -14,133 +14,111 @@ export function useTimer(roomId?: string) {
   const [mode, setMode] = useState<Mode>("Focus");
   const [timeLeft, setTimeLeft] = useState(1500);
   const [isRunning, setIsRunning] = useState(false);
-  const [cycleCount, setCycleCount] = useState(0);
-
   const [durations, setDurations] = useState<Durations>({
     focus: 1500,
     break: 300,
     longBreak: 900,
   });
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const playSound = () => {
-    const audio = new Audio("/notification.mp3");
-    audio.play().catch(() => {});
-  };
-
-  const handleAutoSwitch = () => {
-    playSound();
-
-    if (mode === "Focus") {
-      const newCycle = cycleCount + 1;
-      setCycleCount(newCycle);
-
-      if (newCycle % 4 === 0) {
-        setMode("Long Break");
-        setTimeLeft(durations.longBreak);
-      } else {
-        setMode("Break");
-        setTimeLeft(durations.break);
-      }
-    } else {
-      setMode("Focus");
-      setTimeLeft(durations.focus);
-    }
-  };
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (!roomId) return;
 
-    intervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleAutoSwitch();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const timerDocRef = doc(db, "rooms", roomId, "meta", "timer");
+
+    const unsub = onSnapshot(timerDocRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+
+      setMode(data.mode);
+      setDurations(data.durations);
+      setIsRunning(data.isRunning);
+
+      if (data.isRunning && data.endsAt) {
+        const endMillis = (data.endsAt as Timestamp).toMillis();
+        const updateTick = () => {
+          const now = Date.now();
+          const remaining = Math.max(0, Math.round((endMillis - now) / 1000));
+          
+          if (remaining <= 0) {
+            setTimeLeft(0);
+            if (timerRef.current) clearInterval(timerRef.current);
+          } else {
+            setTimeLeft(remaining);
+          }
+        };
+
+        updateTick();
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(updateTick, 1000);
+      } else {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setTimeLeft(data.timeLeft || 0);
+      }
+    });
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      unsub();
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, mode, cycleCount, durations]);
-
-  useEffect(() => {
-    if (!roomId) return;
-
-    const load = async () => {
-      const snap = await getDoc(doc(db, "rooms", roomId, "meta", "timer"));
-      if (snap.exists()) {
-        const data = snap.data();
-        setMode(data.mode);
-        setTimeLeft(data.timeLeft);
-        setIsRunning(data.isRunning);
-        setCycleCount(data.cycleCount || 0);
-        setDurations(data.durations);
-      }
-    };
-
-    load();
   }, [roomId]);
 
-  useEffect(() => {
+  const startTimer = async () => {
     if (!roomId) return;
-
-    setDoc(doc(db, "rooms", roomId, "meta", "timer"), {
-      mode,
-      timeLeft,
-      isRunning,
-      cycleCount,
-      durations,
+    const endsAt = Date.now() + timeLeft * 1000;
+    await updateDoc(doc(db, "rooms", roomId, "meta", "timer"), {
+      isRunning: true,
+      endsAt: Timestamp.fromMillis(endsAt),
     });
-  }, [mode, timeLeft, isRunning, cycleCount, durations, roomId]);
-
-  const startTimer = () => setIsRunning(true);
-  const pauseTimer = () => setIsRunning(false);
-
-  const resetTimer = () => {
-    setIsRunning(false);
-    setTimeLeft(
-      mode === "Focus"
-        ? durations.focus
-        : mode === "Break"
-        ? durations.break
-        : durations.longBreak
-    );
   };
 
-  const switchMode = () => {
-    setIsRunning(false);
-
-    if (mode === "Focus") {
-      setMode("Break");
-      setTimeLeft(durations.break);
-    } else {
-      setMode("Focus");
-      setTimeLeft(durations.focus);
-    }
+  const pauseTimer = async () => {
+    if (!roomId) return;
+    await updateDoc(doc(db, "rooms", roomId, "meta", "timer"), {
+      isRunning: false,
+      timeLeft: timeLeft,
+      endsAt: null,
+    });
   };
 
-  const updateSettings = (focusMin: number, breakMin: number) => {
+  const resetTimer = async () => {
+    if (!roomId) return;
+    const defaultTime = mode === "Focus" ? durations.focus : mode === "Break" ? durations.break : durations.longBreak;
+    await updateDoc(doc(db, "rooms", roomId, "meta", "timer"), {
+      isRunning: false,
+      timeLeft: defaultTime,
+      endsAt: null,
+    });
+  };
+
+  const switchMode = async () => {
+    if (!roomId) return;
+    const nextMode = mode === "Focus" ? "Break" : "Focus";
+    const nextTime = nextMode === "Focus" ? durations.focus : durations.break;
+    
+    await updateDoc(doc(db, "rooms", roomId, "meta", "timer"), {
+      mode: nextMode,
+      isRunning: false,
+      timeLeft: nextTime,
+      endsAt: null,
+    });
+  };
+
+  const updateSettings = async (focusMin: number, breakMin: number) => {
+    if (!roomId) return;
     const newDurations = {
       focus: focusMin * 60,
       break: breakMin * 60,
       longBreak: 15 * 60,
     };
 
-    setDurations(newDurations);
+    const nextTime = mode === "Focus" ? newDurations.focus : mode === "Break" ? newDurations.break : newDurations.longBreak;
 
-    if (!isRunning) {
-      setTimeLeft(
-        mode === "Focus"
-          ? newDurations.focus
-          : mode === "Break"
-          ? newDurations.break
-          : newDurations.longBreak
-      );
-    }
+    await updateDoc(doc(db, "rooms", roomId, "meta", "timer"), {
+      durations: newDurations,
+      timeLeft: isRunning ? timeLeft : nextTime,
+    });
   };
 
   return {
