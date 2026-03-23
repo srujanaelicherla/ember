@@ -51,7 +51,7 @@ export default function Room() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskInput, setNewTaskInput] = useState("");
   const [copied, setCopied] = useState(false);
-  
+
   const [roomName, setRoomName] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [isSaved, setIsSaved] = useState(false);
@@ -104,7 +104,9 @@ export default function Room() {
       return;
     }
     try {
-      await updateDoc(doc(db, "rooms", roomId, "tasks", id), { text: editingText.trim() });
+      await updateDoc(doc(db, "rooms", roomId, "tasks", id), {
+        text: editingText.trim(),
+      });
       setEditingTaskId(null);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -112,7 +114,9 @@ export default function Room() {
   };
 
   const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+    `${Math.floor(s / 60)
+      .toString()
+      .padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   // --- 2. EFFECTS ---
 
@@ -136,7 +140,7 @@ export default function Room() {
           timeLeft: 1500,
           isRunning: false,
           durations: { focus: 1500, break: 300, longBreak: 900 },
-          endsAt: null
+          endsAt: null,
         });
       }
       setLoading(false);
@@ -152,9 +156,12 @@ export default function Room() {
   // Sync Saved Status
   useEffect(() => {
     if (!roomId || !user) return;
-    const unsubSaved = onSnapshot(doc(db, "rooms", roomId, "members", user.uid), (snap) => {
-      setIsSaved(snap.exists());
-    });
+    const unsubSaved = onSnapshot(
+      doc(db, "rooms", roomId, "members", user.uid),
+      (snap) => {
+        setIsSaved(snap.exists());
+      },
+    );
     return () => unsubSaved();
   }, [roomId, user]);
 
@@ -169,14 +176,22 @@ export default function Room() {
     if (!user || tasks.length === 0) return;
     const myTasks = tasks.filter((t) => t.createdBy === user.email);
     const completed = myTasks.filter((t) => t.isCompleted).length;
-    const currentProgress = myTasks.length === 0 ? 0 : (completed / myTasks.length) * 100;
+    const currentProgress =
+      myTasks.length === 0 ? 0 : (completed / myTasks.length) * 100;
 
     if (currentProgress >= 99.9 && prevProgressRef.current < 99.9) {
       confetti({
         particleCount: 200,
         spread: 160,
         origin: { y: 0.6 },
-        colors: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
+        colors: [
+          "#FF0000",
+          "#00FF00",
+          "#0000FF",
+          "#FFFF00",
+          "#FF00FF",
+          "#00FFFF",
+        ],
       });
     }
     prevProgressRef.current = currentProgress;
@@ -194,49 +209,81 @@ export default function Room() {
     const unsubRoom = onSnapshot(doc(db, "rooms", roomId), (snap) => {
       if (snap.exists()) setRoomName(snap.data().name || "Untitled Room");
     });
-    const unsubMembers = onSnapshot(collection(db, "rooms", roomId, "members"), (s) =>
-      setMembers(s.docs.map((d) => ({
-        id: d.id,
-        email: d.data().email,
-        status: d.data().status || "Offline",
-        nickname: d.data().nickname || d.data().email?.split("@")[0],
-      }) as Member))
+    const unsubMembers = onSnapshot(
+      collection(db, "rooms", roomId, "members"),
+      (s) =>
+        setMembers(
+          s.docs.map(
+            (d) =>
+              ({
+                id: d.id,
+                email: d.data().email,
+                status: d.data().status || "Offline",
+                nickname: d.data().nickname || d.data().email?.split("@")[0],
+              }) as Member,
+          ),
+        ),
     );
-    const tasksQuery = query(collection(db, "rooms", roomId, "tasks"), orderBy("createdAt", "desc"));
+    const tasksQuery = query(
+      collection(db, "rooms", roomId, "tasks"),
+      orderBy("createdAt", "desc"),
+    );
     const unsubTasks = onSnapshot(tasksQuery, (s) =>
-      setTasks(s.docs.map((d) => ({
-        id: d.id,
-        text: d.data().text,
-        isCompleted: d.data().isCompleted,
-        createdBy: d.data().createdBy,
-        createdAt: d.data().createdAt,
-      }) as Task))
+      setTasks(
+        s.docs.map(
+          (d) =>
+            ({
+              id: d.id,
+              text: d.data().text,
+              isCompleted: d.data().isCompleted,
+              createdBy: d.data().createdBy,
+              createdAt: d.data().createdAt,
+            }) as Task,
+        ),
+      ),
     );
-    const chatQuery = query(collection(db, "rooms", roomId, "chat"), orderBy("createdAt", "asc"));
+    const chatQuery = query(
+      collection(db, "rooms", roomId, "chat"),
+      orderBy("createdAt", "asc"),
+    );
     const unsubChat = onSnapshot(chatQuery, (s) =>
-      setMessages(s.docs.map((d) => ({
-        id: d.id,
-        text: d.data().text,
-        sender: d.data().sender,
-        createdAt: d.data().createdAt,
-        replyTo: d.data().replyTo || null,
-      }) as ChatMessage))
+      setMessages(
+        s.docs.map(
+          (d) =>
+            ({
+              id: d.id,
+              text: d.data().text,
+              sender: d.data().sender,
+              createdAt: d.data().createdAt,
+              replyTo: d.data().replyTo || null,
+            }) as ChatMessage,
+        ),
+      ),
     );
-    return () => { unsubRoom(); unsubMembers(); unsubTasks(); unsubChat(); };
+    return () => {
+      unsubRoom();
+      unsubMembers();
+      unsubTasks();
+      unsubChat();
+    };
   }, [roomId]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 font-bold">Connecting...</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 font-bold">
+        Connecting...
+      </div>
+    );
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 text-slate-700 p-6 flex flex-col">
-      
       <div className="flex justify-between items-center mb-6">
-        <button 
-          onClick={() => navigate('/dashboard')} 
+        <button
+          onClick={() => navigate("/dashboard")}
           className="flex items-center gap-2 px-4 py-2 bg-white/40 hover:bg-white/60 rounded-lg text-sm font-bold transition shadow-sm border border-white/20"
         >
           ← Dashboard
@@ -256,13 +303,18 @@ export default function Room() {
       <div className="flex w-full gap-6 mb-6 items-start">
         {/* MEMBERS LIST */}
         <div className="w-[400px] h-[290px] flex flex-col bg-white/60 backdrop-blur rounded-xl shadow-xl p-4 max-h-[300px] overflow-y-auto custom-scrollbar">
-          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">Members</span>
+          <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">
+            Members
+          </span>
           <ul className="space-y-2">
             {members.map((m) => {
               const isMe = m.id === user?.uid;
               const status = m.status || "Offline";
               return (
-                <li key={m.id} className="text-sm font-medium text-slate-800 flex justify-between items-center">
+                <li
+                  key={m.id}
+                  className="text-sm font-medium text-slate-800 flex justify-between items-center"
+                >
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -270,14 +322,32 @@ export default function Room() {
                       value={m.nickname}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setMembers((p) => p.map((x) => (x.id === m.id ? { ...x, nickname: val } : x)));
-                        updateDoc(doc(db, "rooms", roomId!, "members", m.id), { nickname: val }).catch(() => {});
+                        setMembers((p) =>
+                          p.map((x) =>
+                            x.id === m.id ? { ...x, nickname: val } : x,
+                          ),
+                        );
+                        updateDoc(doc(db, "rooms", roomId!, "members", m.id), {
+                          nickname: val,
+                        }).catch(() => {});
                       }}
-                      className={`text-sm font-medium text-slate-800 bg-white/30 rounded px-1 py-0.5 w-[120px] ${!isMe ? 'border-none bg-transparent outline-none cursor-default' : ''}`}
+                      className={`text-sm font-medium text-slate-800 bg-white/30 rounded px-1 py-0.5 w-[120px] ${!isMe ? "border-none bg-transparent outline-none cursor-default" : ""}`}
                     />
-                    <span>{status === "Focus" ? "📖 Focus" : status === "Break" ? "☕ Break" : status === "Paused" ? "⏸️ Paused" : "❌ Offline"}</span>
+                    <span>
+                      {status === "Focus"
+                        ? "📖 Focus"
+                        : status === "Break"
+                          ? "☕ Break"
+                          : status === "Paused"
+                            ? "⏸️ Paused"
+                            : "❌ Offline"}
+                    </span>
                   </div>
-                  {isMe && <span className="text-xs text-indigo-500 font-bold">(You)</span>}
+                  {isMe && (
+                    <span className="text-xs text-indigo-500 font-bold">
+                      (You)
+                    </span>
+                  )}
                 </li>
               );
             })}
@@ -286,13 +356,19 @@ export default function Room() {
 
         {/* TIMER */}
         <div className="flex-1 max-w-[700px] h-[290px] flex flex-col items-center justify-center bg-white/50 backdrop-blur rounded-xl p-6 shadow-xl">
-          <div className="text-xs uppercase tracking-widest text-slate-600 mb-2 font-bold">{mode}</div>
-          <div className="text-6xl font-mono font-bold text-slate-700 mb-5">{formatTime(timeLeft)}</div>
+          <div className="text-xs uppercase tracking-widest text-slate-600 mb-2 font-bold">
+            {mode}
+          </div>
+          <div className="text-6xl font-mono font-bold text-slate-700 mb-5">
+            {formatTime(timeLeft)}
+          </div>
 
           {!isRunning && (
             <div className="flex gap-6 mb-5">
               <div className="flex flex-col items-center">
-                <span className="text-xs text-slate-600 mb-1 font-bold">Focus</span>
+                <span className="text-xs text-slate-600 mb-1 font-bold">
+                  Focus
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -307,7 +383,9 @@ export default function Room() {
                 />
               </div>
               <div className="flex flex-col items-center">
-                <span className="text-xs text-slate-600 mb-1 font-bold">Break</span>
+                <span className="text-xs text-slate-600 mb-1 font-bold">
+                  Break
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -331,65 +409,119 @@ export default function Room() {
             >
               {isRunning ? "❚❚" : "▶"}
             </button>
-            <button onClick={() => resetTimer()} className="w-10 h-10 rounded-full bg-white/70 text-slate-700 text-lg flex items-center justify-center shadow-sm">⟳</button>
-            <button onClick={() => switchMode()} className="px-5 py-2 rounded-full bg-indigo-300 hover:bg-indigo-400 text-white font-bold shadow-md">{mode === "Focus" ? "Break" : "Focus"}</button>
+            <button
+              onClick={() => resetTimer()}
+              className="w-10 h-10 rounded-full bg-white/70 text-slate-700 text-lg flex items-center justify-center shadow-sm"
+            >
+              ⟳
+            </button>
+            <button
+              onClick={() => switchMode()}
+              className="px-5 py-2 rounded-full bg-indigo-300 hover:bg-indigo-400 text-white font-bold shadow-md"
+            >
+              {mode === "Focus" ? "Break" : "Focus"}
+            </button>
           </div>
         </div>
 
         {/* ROOM DETAILS */}
         <div className="w-[350px] flex flex-col gap-4">
-            <div className="flex flex-col justify-center bg-white/60 backdrop-blur rounded-xl shadow-xl p-4">
-                <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">Room Name</span>
-                <input
-                    type="text"
-                    value={roomName}
-                    disabled={user?.uid !== ownerId}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    onBlur={(e) => {
-                        if (user?.uid === ownerId) {
-                            updateDoc(doc(db, "rooms", roomId!), { name: e.target.value });
-                        }
-                    }}
-                    placeholder="Enter room name..."
-                    className={`bg-white/80 border border-white/50 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-300 ${user?.uid !== ownerId ? 'cursor-default border-none' : ''}`}
-                />
-            </div>
+          <div className="flex flex-col justify-center bg-white/60 backdrop-blur rounded-xl shadow-xl p-4">
+            <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">
+              Room Name
+            </span>
+            <input
+              type="text"
+              value={roomName}
+              disabled={user?.uid !== ownerId}
+              onChange={(e) => setRoomName(e.target.value)}
+              onBlur={(e) => {
+                if (user?.uid === ownerId) {
+                  updateDoc(doc(db, "rooms", roomId!), {
+                    name: e.target.value,
+                  });
+                }
+              }}
+              placeholder="Enter room name..."
+              className={`bg-white/80 border border-white/50 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-300 ${user?.uid !== ownerId ? "cursor-default border-none" : ""}`}
+            />
+          </div>
 
-            <div className="flex flex-col justify-center bg-white/60 backdrop-blur rounded-xl shadow-xl p-4">
-            <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">Room Code</span>
+          <div className="flex flex-col justify-center bg-white/60 backdrop-blur rounded-xl shadow-xl p-4">
+            <span className="text-xs text-slate-600 uppercase tracking-widest mb-2 font-bold">
+              Room Code
+            </span>
             <div className="flex items-center justify-between bg-white/80 border border-white/50 rounded-lg px-3 py-2 shadow">
-                <span className="font-mono text-base font-bold text-slate-800 tracking-widest truncate">{roomId}</span>
-                <button
+              <span className="font-mono text-base font-bold text-slate-800 tracking-widest truncate">
+                {roomId}
+              </span>
+              <button
                 onClick={() => {
-                    navigator.clipboard.writeText(roomId || "");
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1000);
+                  navigator.clipboard.writeText(roomId || "");
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1000);
                 }}
                 className="ml-2 px-2 py-1 text-xs font-semibold bg-purple-300 text-white rounded hover:bg-purple-400 transition"
-                >
+              >
                 {copied ? "✓" : "Copy"}
-                </button>
+              </button>
             </div>
-            </div>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-1 gap-6">
         {/* CHAT */}
         <div className="w-[400px] h-[520px] bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col">
-          <div className="bg-indigo-100 text-slate-700 font-bold p-4 rounded-t-xl">Room Chat</div>
+          <div className="bg-indigo-100 text-slate-700 font-bold p-4 rounded-t-xl">
+            Room Chat
+          </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
             {messages.map((m) => {
               const isMe = m.sender === user?.email;
-              const repliedMessage = m.replyTo ? messages.find((msg) => msg.id === m.replyTo) : null;
+              const repliedMessage = m.replyTo
+                ? messages.find((msg) => msg.id === m.replyTo)
+                : null;
               return (
-                <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"} group`} onDoubleClick={() => { setReplyingTo(m); chatInputRef.current?.focus(); }}>
+                <div
+                  key={m.id}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+                  onDoubleClick={() => {
+                    setReplyingTo(m);
+                    chatInputRef.current?.focus();
+                  }}
+                >
                   <div className="flex flex-col gap-1 relative max-w-xs">
-                    {repliedMessage && <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">{repliedMessage.text}</div>}
-                    <div className={`px-4 py-2 rounded-lg text-sm shadow-sm ${isMe ? "bg-indigo-300 text-white" : "bg-white text-slate-700"}`}>
+                    {repliedMessage && (
+                      <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">
+                        {repliedMessage.text}
+                      </div>
+                    )}
+                    <div
+                      className={`px-4 py-2 rounded-lg text-sm shadow-sm ${isMe ? "bg-indigo-300 text-white" : "bg-white text-slate-700"}`}
+                    >
                       {m.text}
-                      <button onClick={() => { setReplyingTo(m); chatInputRef.current?.focus(); }} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 text-indigo-400"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+                      <button
+                        onClick={() => {
+                          setReplyingTo(m);
+                          chatInputRef.current?.focus();
+                        }}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="h-4 w-4 text-indigo-400"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
+                          />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -398,22 +530,49 @@ export default function Room() {
             })}
             <div ref={chatBottomRef} />
           </div>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            if (!chatInput.trim()) return;
-            addDoc(collection(db, "rooms", roomId!, "chat"), { text: chatInput, sender: user?.email, createdAt: serverTimestamp(), replyTo: replyingTo?.id || null });
-            setChatInput("");
-            setReplyingTo(null);
-          }} className="p-4 flex gap-2 flex-col border-t border-white/40">
-            {replyingTo && <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-50 rounded flex justify-between items-center text-indigo-600 font-bold">{replyingTo.text}<button type="button" className="text-red-400 ml-2" onClick={() => setReplyingTo(null)}>✕</button></div>}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!chatInput.trim()) return;
+              addDoc(collection(db, "rooms", roomId!, "chat"), {
+                text: chatInput,
+                sender: user?.email,
+                createdAt: serverTimestamp(),
+                replyTo: replyingTo?.id || null,
+              });
+              setChatInput("");
+              setReplyingTo(null);
+            }}
+            className="p-4 flex gap-2 flex-col border-t border-white/40"
+          >
+            {replyingTo && (
+              <div className="text-[10px] mb-1 px-2 py-1 bg-indigo-50 rounded flex justify-between items-center text-indigo-600 font-bold">
+                {replyingTo.text}
+                <button
+                  type="button"
+                  className="text-red-400 ml-2"
+                  onClick={() => setReplyingTo(null)}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <div className="flex gap-2">
-              <input ref={chatInputRef} value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type message..." className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none" />
-              <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold transition">Send</button>
+              <input
+                ref={chatInputRef}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type message..."
+                className="flex-1 bg-white/70 text-sm p-2.5 rounded-lg outline-none"
+              />
+              <button className="bg-indigo-300 hover:bg-indigo-400 px-5 rounded-lg text-white font-bold transition">
+                Send
+              </button>
             </div>
           </form>
         </div>
 
-{/* TASK BOARDS */}
+        {/* TASK BOARDS */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto pr-2 custom-scrollbar">
           {[...members]
             .sort((a, b) => {
@@ -423,12 +582,16 @@ export default function Room() {
             })
             .map((member) => {
               const isMe = member.id === user?.uid;
-              const memberTasks = tasks.filter((t) => t.createdBy === member.email);
+              const memberTasks = tasks.filter(
+                (t) => t.createdBy === member.email,
+              );
               const progress =
                 memberTasks.length === 0
                   ? 0
                   : Math.round(
-                      (memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100
+                      (memberTasks.filter((t) => t.isCompleted).length /
+                        memberTasks.length) *
+                        100,
                     );
               return (
                 <div
@@ -452,15 +615,21 @@ export default function Room() {
                   <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
                     <ul className="space-y-3">
                       {memberTasks.map((t) => (
-                        <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
+                        <li
+                          key={t.id}
+                          className="flex items-start gap-3 group min-h-[28px]"
+                        >
                           <input
                             type="checkbox"
                             checked={t.isCompleted}
                             disabled={!isMe}
                             onChange={() =>
-                              updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), {
-                                isCompleted: !t.isCompleted,
-                              })
+                              updateDoc(
+                                doc(db, "rooms", roomId!, "tasks", t.id),
+                                {
+                                  isCompleted: !t.isCompleted,
+                                },
+                              )
                             }
                             className="mt-1 accent-purple-400 w-4 h-4 cursor-pointer shrink-0"
                           />
@@ -479,7 +648,9 @@ export default function Room() {
                           ) : (
                             <span
                               className={`text-base leading-tight flex-1 ${
-                                t.isCompleted ? "line-through text-slate-400" : "text-slate-700"
+                                t.isCompleted
+                                  ? "line-through text-slate-400"
+                                  : "text-slate-700"
                               } ${isMe ? "cursor-pointer" : ""}`}
                               onDoubleClick={() => {
                                 if (isMe) {
@@ -505,7 +676,11 @@ export default function Room() {
                                 </button>
                               )}
                               <button
-                                onClick={() => deleteDoc(doc(db, "rooms", roomId!, "tasks", t.id))}
+                                onClick={() =>
+                                  deleteDoc(
+                                    doc(db, "rooms", roomId!, "tasks", t.id),
+                                  )
+                                }
                                 className="text-red-400 p-0.5 hover:text-red-500 font-bold"
                               >
                                 ✕
