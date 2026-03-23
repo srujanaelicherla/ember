@@ -413,74 +413,140 @@ export default function Room() {
           </form>
         </div>
 
-        {/* TASK BOARDS */}
+{/* TASK BOARDS */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto pr-2 custom-scrollbar">
-          {members.map((member) => {
-            const isMe = member.id === user?.uid;
-            const memberTasks = tasks.filter((t) => t.createdBy === member.email);
-            const progress = memberTasks.length === 0 ? 0 : Math.round((memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100);
-            return (
-              <div key={member.id} className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[320px]">
-                <div className="bg-indigo-300 p-4 flex justify-between items-center rounded-t-xl">
-                  <h3 className="text-xs font-bold text-white truncate max-w-[120px]">{member.nickname} {isMe && "(You)"}</h3>
-                  <div className="relative w-24 h-4 bg-white/30 rounded-full overflow-hidden">
-                    <div className="h-full bg-white transition-all duration-500" style={{ width: `${progress}%` }} />
-                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-700">{progress}%</span>
+          {[...members]
+            .sort((a, b) => {
+              if (a.id === user?.uid) return -1;
+              if (b.id === user?.uid) return 1;
+              return 0;
+            })
+            .map((member) => {
+              const isMe = member.id === user?.uid;
+              const memberTasks = tasks.filter((t) => t.createdBy === member.email);
+              const progress =
+                memberTasks.length === 0
+                  ? 0
+                  : Math.round(
+                      (memberTasks.filter((t) => t.isCompleted).length / memberTasks.length) * 100
+                    );
+              return (
+                <div
+                  key={member.id}
+                  className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[320px]"
+                >
+                  <div className="bg-indigo-300 p-4 flex justify-between items-center rounded-t-xl">
+                    <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
+                      {member.nickname} {isMe && "(You)"}
+                    </h3>
+                    <div className="relative w-24 h-4 bg-white/30 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-white transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-700">
+                        {progress}%
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
-                  <ul className="space-y-3">
-                    {memberTasks.map((t) => (
-                      <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
-                        <input
-                          type="checkbox"
-                          checked={t.isCompleted}
-                          disabled={!isMe}
-                          onChange={() => updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), { isCompleted: !t.isCompleted })}
-                          className="mt-1 accent-purple-400 w-4 h-4 cursor-pointer shrink-0"
-                        />
-                        {editingTaskId === t.id ? (
+                  <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
+                    <ul className="space-y-3">
+                      {memberTasks.map((t) => (
+                        <li key={t.id} className="flex items-start gap-3 group min-h-[28px]">
                           <input
-                            autoFocus
-                            className="flex-1 bg-white/80 text-sm border-b border-indigo-300 outline-none"
-                            value={editingText}
-                            onChange={(e) => setEditingText(e.target.value)}
-                            onBlur={() => handleUpdateTask(t.id)}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleUpdateTask(t.id); if (e.key === "Escape") setEditingTaskId(null); }}
+                            type="checkbox"
+                            checked={t.isCompleted}
+                            disabled={!isMe}
+                            onChange={() =>
+                              updateDoc(doc(db, "rooms", roomId!, "tasks", t.id), {
+                                isCompleted: !t.isCompleted,
+                              })
+                            }
+                            className="mt-1 accent-purple-400 w-4 h-4 cursor-pointer shrink-0"
                           />
-                        ) : (
-                          <span
-                            className={`text-base leading-tight flex-1 ${t.isCompleted ? "line-through text-slate-400" : "text-slate-700"} ${isMe ? "cursor-pointer" : ""}`}
-                            onDoubleClick={() => { if (isMe) { setEditingTaskId(t.id); setEditingText(t.text); } }}
-                          >
-                            {t.text}
-                          </span>
-                        )}
-                        {isMe && (
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {editingTaskId !== t.id && <button onClick={() => { setEditingTaskId(t.id); setEditingText(t.text); }} className="text-indigo-400 hover:text-indigo-600 text-xs p-0.5 font-bold">✎</button>}
-                            <button onClick={() => deleteDoc(doc(db, "rooms", roomId!, "tasks", t.id))} className="text-red-400 p-0.5 hover:text-red-500 font-bold">✕</button>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                          {editingTaskId === t.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 bg-white/80 text-sm border-b border-indigo-300 outline-none"
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              onBlur={() => handleUpdateTask(t.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleUpdateTask(t.id);
+                                if (e.key === "Escape") setEditingTaskId(null);
+                              }}
+                            />
+                          ) : (
+                            <span
+                              className={`text-base leading-tight flex-1 ${
+                                t.isCompleted ? "line-through text-slate-400" : "text-slate-700"
+                              } ${isMe ? "cursor-pointer" : ""}`}
+                              onDoubleClick={() => {
+                                if (isMe) {
+                                  setEditingTaskId(t.id);
+                                  setEditingText(t.text);
+                                }
+                              }}
+                            >
+                              {t.text}
+                            </span>
+                          )}
+                          {isMe && (
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {editingTaskId !== t.id && (
+                                <button
+                                  onClick={() => {
+                                    setEditingTaskId(t.id);
+                                    setEditingText(t.text);
+                                  }}
+                                  className="text-indigo-400 hover:text-indigo-600 text-xs p-0.5 font-bold"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              <button
+                                onClick={() => deleteDoc(doc(db, "rooms", roomId!, "tasks", t.id))}
+                                className="text-red-400 p-0.5 hover:text-red-500 font-bold"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {isMe && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (newTaskInput.trim()) {
+                          addDoc(collection(db, "rooms", roomId!, "tasks"), {
+                            text: newTaskInput,
+                            isCompleted: false,
+                            createdBy: user.email,
+                            createdAt: Date.now(),
+                          });
+                          setNewTaskInput("");
+                        }
+                      }}
+                      className="p-4 flex gap-2 border-t border-white/10"
+                    >
+                      <input
+                        type="text"
+                        value={newTaskInput}
+                        onChange={(e) => setNewTaskInput(e.target.value)}
+                        placeholder="Add task..."
+                        className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none"
+                      />
+                      <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold transition shadow-sm">
+                        +
+                      </button>
+                    </form>
+                  )}
                 </div>
-                {isMe && (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newTaskInput.trim()) {
-                      addDoc(collection(db, "rooms", roomId!, "tasks"), { text: newTaskInput, isCompleted: false, createdBy: user.email, createdAt: Date.now() });
-                      setNewTaskInput("");
-                    }
-                  }} className="p-4 flex gap-2 border-t border-white/10">
-                    <input type="text" value={newTaskInput} onChange={(e) => setNewTaskInput(e.target.value)} placeholder="Add task..." className="flex-1 bg-white/70 text-xs p-2.5 rounded-lg outline-none" />
-                    <button className="bg-indigo-300 hover:bg-indigo-400 px-4 rounded text-white font-bold transition shadow-sm">+</button>
-                  </form>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
       <style>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5f5; border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a5b4fc; }`}</style>
