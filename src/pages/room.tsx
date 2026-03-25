@@ -269,8 +269,13 @@ export default function Room() {
   }, [roomId]);
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [messages]); // Runs every time messages update
 
   if (loading)
     return (
