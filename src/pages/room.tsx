@@ -596,7 +596,7 @@ export default function Room() {
               return (
                 <div
                   key={member.id}
-                  className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[320px]"
+                  className="bg-white/60 backdrop-blur rounded-xl shadow-xl flex flex-col h-[520px]"
                 >
                   <div className="bg-indigo-300 p-4 flex justify-between items-center rounded-t-xl">
                     <h3 className="text-xs font-bold text-white truncate max-w-[120px]">
