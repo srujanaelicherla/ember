@@ -484,18 +484,35 @@ export default function Room() {
           <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
             {messages.map((m) => {
               const isMe = m.sender === user?.email;
+
+              // Find the member object that matches this sender's email
+              // to get their current nickname
+              const senderMember = members.find(
+                (mem) => mem.email === m.sender,
+              );
+              const senderDisplayName =
+                senderMember?.nickname || m.sender?.split("@")[0] || "Unknown";
+
               const repliedMessage = m.replyTo
                 ? messages.find((msg) => msg.id === m.replyTo)
                 : null;
+
               return (
                 <div
                   key={m.id}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+                  className={`flex flex-col ${isMe ? "items-end" : "items-start"} group mb-2`}
                   onDoubleClick={() => {
                     setReplyingTo(m);
                     chatInputRef.current?.focus();
                   }}
                 >
+                  {/* 1. SENDER NAME TAG: Only show if there are more than 2 members and it's not you */}
+                  {members.length > 2 && !isMe && (
+                    <span className="text-[10px] font-bold text-indigo-500 ml-1 mb-0.5">
+                      {senderDisplayName}
+                    </span>
+                  )}
+
                   <div className="flex flex-col gap-1 relative max-w-xs">
                     {repliedMessage && (
                       <div className="px-2 py-1 text-[10px] bg-white/50 border-l-2 border-indigo-300 rounded-l-md text-slate-600">
@@ -503,7 +520,11 @@ export default function Room() {
                       </div>
                     )}
                     <div
-                      className={`px-4 py-2 rounded-lg text-sm shadow-sm ${isMe ? "bg-indigo-300 text-white" : "bg-white text-slate-700"}`}
+                      className={`px-4 py-2 rounded-lg text-sm shadow-sm ${
+                        isMe
+                          ? "bg-indigo-300 text-white"
+                          : "bg-white text-slate-700"
+                      }`}
                     >
                       {m.text}
                       <button
